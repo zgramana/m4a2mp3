@@ -12,13 +12,6 @@
 
 # For Linux
 #VLC="/usr/bin/VLC"
-function next() {
-    lastI = ${#inpaths[@]}
-    last = $inpaths[lastI]
-    echo "Last I at: ${lastI} with: ${last}"
-    # return $last
-}
-
 
 # For OSX
 VLC="/Applications/VLC.app/Contents/MacOS/VLC"
