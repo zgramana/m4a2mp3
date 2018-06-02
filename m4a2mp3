@@ -1,0 +1,136 @@
+#!/bin/sh -e
+
+# TITLE:
+#   m4a2mp3
+#
+# DESCRIPTION:
+#   Transcode .m4a audio files (e.g. Apple iTunes downloads) to .mp3 files
+#   (Ideal for parents who want to load music on kids music players)
+#
+# AUTHOR:
+#   Zachary Gramana
+
+# For Linux
+#VLC="/usr/bin/VLC"
+function next() {
+    lastI = ${#inpaths[@]}
+    last = $inpaths[lastI]
+    echo "Last I at: ${lastI} with: ${last}"
+    # return $last
+}
+
+
+# For OSX
+VLC="/Applications/VLC.app/Contents/MacOS/VLC"
+
+if [ ! -e "$VLC" ]; then
+    echo "Command '$VLC' does not exist"
+    exit 1
+fi
+
+# Default track counter starting value
+# User overrides passing the '-n' option,
+# e.g.: m4a2mp3 -n 21 ...
+TRACK_INDEX_COUNTER=1
+EXECUTE_COMMAND_SCRIPT=0
+while getopts :n:x: opt; do
+case $opt in
+    n)  TRACK_INDEX_COUNTER=$OPTARG ;; # Start track numbering at user provided value
+    x)  EXECUTE_COMMAND_SCRIPT=1 ;;    # Execute the command script after generating it.
+    \?) echo "Unknown option"
+        exit 1 ;;
+esac
+done
+
+shift $((OPTIND-1)) #Remove processed args
+
+# Some mp3 players require that files be
+# prefixed with a unique number, so we'll
+# do that during the transcoding as long
+# as you pass in a directory.
+#if [ -n $TRACK_INDEX_COUNTER ];
+inpaths=$@
+paths=()
+
+echo $inpaths
+
+counter=${#inpaths[@]}
+while [[ $counter > 0 ]]; do
+    # Handle directory or file paths
+    echo "Counter len: $counter"
+    nextPaths=()
+    for path in "${inpaths[@]}"; do
+        echo Testing "${path}"
+        ((counter-=1))
+        if [[ -d "${path}" ]]; then
+            echo "FOUND DIR $path"
+            for subpath in "$path"/*; do
+                echo "FOUND IN SUBDIR $subpath"
+                lastI=${#nextPaths[@]}
+                last=$nextPaths[${lastI}]
+                echo "Last I at: ${lastI} with: ${last}"
+                nextPaths[${#nextPaths[@]}]=$subpath
+                ((counter+=1))
+            done
+        else
+            echo "FOUND PATH '$path'"
+            ((counter-=1))
+            # if [[ "$$" == mp4a ]]; then
+            paths[${#paths[@]}]=$path
+            # fi
+        fi
+    done
+    inpaths=("${nextPaths[@]}")
+    printf "inpath: %s\n" "${inpaths[@]}"
+done
+
+
+for p in "${paths[@]}"; do
+    echo "YO! path ${p}"
+done
+
+for file in "${paths[@]}"; do
+    echo "=> Transcoding '$file'... "
+    printf -v num "%03d" "$TRACK_INDEX_COUNTER"
+    if [[ -z $dst ]]; then
+        mkdir -p "MP3"
+        dst="${PWD}/MP3"
+    fi
+
+    new=`basename ${file} | sed -e 's/m4a/mp3/g'`
+    new=`echo ${new} | sed -e "s/[\ ,\(\)\!]/_/g"`
+    new=`echo ${new} | sed -e "s/'//g"`
+    # Using the dummy mux so that we can
+    # transcode faster than realtime, and
+    # so the audio won't playback
+    CMD="${VLC} -v -I dummy \"${file}\" --noaudio \
+        --sout \"#transcode{acodec=mp3,ab=128}:standard{access=file{no-overwrite},mux=dummy,dst=\"'${dst}/${num}-${new}'\"}\" \
+       VLC://quit"
+
+    outfile="${dst}/${num}-${new}"
+
+    # Skip directories
+
+    # Technically there wouldn't be harm in
+    # running the $CMD since we specified
+    # no-overwrite, but this avoids a
+    # lot of noisy spew on stdout
+    if [[ -f ${outfile} ]]; then
+        echo "Skipping existing file: ${outfile}"
+    else
+        # For reasons I don't understand, VLC will randomly
+        # fail to transcode some songs on the first one or two
+        # attempts. This script creates a second script to
+        # both make it easy to re-run, and to get past a
+        # tricky escaping issue when passing the outfile path
+        # to dst in the sout options string. ¯\_(ツ)_/¯
+        echo "Will create ${outfile}"
+        echo $CMD >> commands.sh
+        echo sleep 3 >> commands.sh
+    fi
+    ((TRACK_INDEX_COUNTER++))
+done
+chmod 755 commands.sh
+if [ $EXECUTE_COMMAND_SCRIPT -eq 1 ]; then
+    sh commands.sh
+fi
