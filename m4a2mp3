@@ -6,6 +6,8 @@
 # DESCRIPTION:
 #   Transcode .m4a audio files (e.g. Apple iTunes downloads) to .mp3 files
 #   (Ideal for parents who want to load music on kids music players)
+#   Pass in one or more paths to either .m4a files or to directories
+#   containing them.
 #
 # AUTHOR:
 #   Zachary Gramana
@@ -49,38 +51,27 @@ echo $inpaths
 
 counter=${#inpaths[@]}
 while [[ $counter > 0 ]]; do
-    # Handle directory or file paths
-    echo "Counter len: $counter"
+    # Handle directory _or_ file paths
     nextPaths=()
     for path in "${inpaths[@]}"; do
-        echo Testing "${path}"
         ((counter-=1))
         if [[ -d "${path}" ]]; then
-            echo "FOUND DIR $path"
             for subpath in "$path"/*; do
-                echo "FOUND IN SUBDIR $subpath"
                 lastI=${#nextPaths[@]}
                 last=$nextPaths[${lastI}]
-                echo "Last I at: ${lastI} with: ${last}"
                 nextPaths[${#nextPaths[@]}]=$subpath
                 ((counter+=1))
             done
         else
-            echo "FOUND PATH '$path'"
             ((counter-=1))
-            # if [[ "$$" == mp4a ]]; then
-            paths[${#paths[@]}]=$path
-            # fi
+            if [[ "$$" == m4a ]]; then
+              paths[${#paths[@]}]=$path
+            fi
         fi
     done
     inpaths=("${nextPaths[@]}")
-    printf "inpath: %s\n" "${inpaths[@]}"
 done
 
-
-for p in "${paths[@]}"; do
-    echo "YO! path ${p}"
-done
 
 for file in "${paths[@]}"; do
     echo "=> Transcoding '$file'... "
